@@ -16,8 +16,10 @@ import {
   Send,
   Maximize2,
   Minimize2,
-  LayoutGrid,
-  GripHorizontal
+  GripVertical,
+  Plus,
+  ArrowDown,
+  ArrowUp
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -37,13 +39,11 @@ interface Sticker {
 
 type Stage = 'main' | 'slideshow';
 
-// --- Constants ---
-const DEFAULT_USER = "Gakusei"; 
-
+// --- Assets ---
 const categories = [
-  { id: 'aisatsu', name: 'あいさつ', color: 'bg-blue-500' },
-  { id: 'game', name: 'ゲーム', color: 'bg-purple-500' },
-  { id: 'hagemashi', name: 'はげまし', color: 'bg-green-500' }
+  { id: 'aisatsu', name: 'あいさつ' },
+  { id: 'game', name: 'ゲーム' },
+  { id: 'hagemashi', name: 'はげまし' }
 ];
 
 const stickerPaths: string[] = [];
@@ -72,25 +72,25 @@ export default function Home() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSending, setIsSending] = useState(false);
   
-  const [reorderList, setReorderList] = useState<Sticker[]>(initialStickersData);
+  const [selectedList, setSelectedList] = useState<Sticker[]>([]);
+  const [unselectedList, setUnselectedList] = useState<Sticker[]>(initialStickersData);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(false);
-  const [gridCols, setGridCols] = useState(4); 
-  
-  // Load Initial State from Supabase
+
+  // Load Initial State
   useEffect(() => {
     const initApp = async () => {
       try {
         const { data } = await supabase
           .from('sticker_selections')
           .select('*')
-          .eq('nickname', DEFAULT_USER)
+          .eq('nickname', 'Gakusei')
           .single();
 
-        if (data) {
-          if (data.reorder_list && Array.isArray(data.reorder_list)) {
-            setReorderList(data.reorder_list);
-          }
+        if (data && data.reorder_list && Array.isArray(data.reorder_list)) {
+          setSelectedList(data.reorder_list);
+          const usedIds = data.reorder_list.map((s: Sticker) => s.id);
+          setUnselectedList(initialStickersData.filter(s => !usedIds.includes(s.id)));
           setIsConfirmed(data.is_confirmed || false);
         }
       } catch (e) {
@@ -108,8 +108,9 @@ export default function Home() {
     setIsSyncing(true);
     try {
       await supabase.from('sticker_selections').upsert({
-        nickname: DEFAULT_USER,
-        reorder_list: reorderList,
+        nickname: 'Gakusei',
+        reorder_list: selectedList,
+        selected_ids: selectedList.map(s => s.id),
         is_confirmed: forceConfirmed !== undefined ? forceConfirmed : isConfirmed,
         updated_at: new Date().toISOString()
       }, { onConflict: 'nickname' });
@@ -125,229 +126,203 @@ export default function Home() {
       const timer = setTimeout(() => syncToSupabase(), 2000);
       return () => clearTimeout(timer);
     }
-  }, [reorderList, isConfirmed, isInitialized]);
+  }, [selectedList, isConfirmed, isInitialized]);
+
+  // Actions
+  const addToSelected = (sticker: Sticker) => {
+    if (isConfirmed) return;
+    setUnselectedList(prev => prev.filter(s => s.id !== sticker.id));
+    setSelectedList(prev => [...prev, sticker]);
+  };
+
+  const removeFromSelected = (sticker: Sticker) => {
+    if (isConfirmed) return;
+    setSelectedList(prev => prev.filter(s => s.id !== sticker.id));
+    setUnselectedList(prev => [sticker, ...prev]);
+  };
 
   const handleReset = () => {
-    if (confirm("順番を最初のリセットしますか？")) {
-      setReorderList(initialStickersData);
+    if (confirm("最初からやり直しますか？")) {
+      setSelectedList([]);
+      setUnselectedList(initialStickersData);
       setIsConfirmed(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handleNotifyTeacher = async () => {
-    const messageContent = prompt("先生へのひとことメッセージ：", "順番を決めました！");
+    const messageContent = prompt("先生へのメッセージを入力：", `${selectedList.length}個選びました！`);
     if (messageContent === null) return;
-
     setIsSending(true);
     try {
-      const stickerNames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
-      
+      const stickerNames = selectedList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
       const response = await fetch('/api/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nickname: DEFAULT_USER,
-          message: messageContent,
-          stickerList: stickerNames
-        })
+        body: JSON.stringify({ nickname: 'Gakusei', message: messageContent, stickerList: stickerNames })
       });
-
       if (response.ok) {
         alert("先生へ送信しました！");
         setIsConfirmed(true);
         await syncToSupabase(true);
       } else {
         alert("送信に失敗しました。メールアプリを開きます。");
-        const body = encodeURIComponent(`先生へ\n\n${messageContent}\n\n■選んだリスト：\n${stickerNames}`);
-        window.location.href = `mailto:miidacnt@gmail.com?subject=スタンプ確定報告&body=${body}`;
-        setIsConfirmed(true);
-        await syncToSupabase(true);
+        window.location.href = `mailto:miidacnt@gmail.com?subject=報告&body=${encodeURIComponent(stickerNames)}`;
       }
-    } catch (e) {
-      console.error("Send error", e);
     } finally {
       setIsSending(false);
     }
   };
 
-  if (!isInitialized) {
-    return (
-      <div className="min-h-screen bg-[#00B900] flex items-center justify-center">
-        <Loader2 className="text-white animate-spin" size={48} />
-      </div>
-    );
-  }
+  if (!isInitialized) return <div className="min-h-screen bg-[#00B900] flex items-center justify-center"><Loader2 className="text-white animate-spin" size={48} /></div>;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] pb-24">
-      {/* --- Top Bar --- */}
-      <div className="sticky top-0 left-0 w-full bg-[#00B900] z-[80] shadow-xl text-white">
-        <div className="max-w-xl mx-auto px-6 py-6 flex flex-col items-center gap-4">
-          <div className="flex w-full justify-between items-center text-[10px] font-black opacity-70 uppercase tracking-widest leading-none">
+    <div className="min-h-screen bg-[#f0f2f5] pb-40">
+      {/* Header */}
+      <div className="sticky top-0 z-[80] bg-[#00B900] text-white shadow-lg p-6">
+        <div className="max-w-xl mx-auto space-y-4">
+          <div className="flex justify-between items-center text-[10px] font-black opacity-70">
             <div className="flex items-center gap-1">
               <div className={cn("w-1.5 h-1.5 rounded-full", isSyncing ? "bg-white animate-pulse" : "bg-white/40")} />
-              {isSyncing ? "同期中..." : "保存済み"}
+              {isSyncing ? "自動保存中..." : "保存済み"}
             </div>
-            <div>LINEスタンプ ならびかえ</div>
+            <div>STAMP ARRANGER</div>
           </div>
-
-          <div className="flex items-center gap-8 w-full justify-center">
-            <div className="flex flex-col items-center">
-              <span className="text-[10px] font-black opacity-60 uppercase mb-1">ならびかえ中</span>
-              <div className="flex items-baseline gap-1 leading-none">
-                <span className="text-6xl font-black tabular-nums">{reorderList.length}</span>
-                <span className="text-xl font-bold opacity-40">枚</span>
+          
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black opacity-60">選んだ数</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-5xl font-black">{selectedList.length}</span>
+                <span className="text-lg opacity-40">枚</span>
               </div>
             </div>
 
-            {!isConfirmed && (
+            <div className="flex flex-col gap-2">
               <button 
                 onClick={() => setStage('slideshow')}
-                className="bg-white text-[#00B900] px-8 py-3 rounded-full font-black text-sm shadow-[0_4px_0_#eeeeee] active:shadow-none active:translate-y-[4px] flex items-center gap-2 transition-all"
+                disabled={selectedList.length === 0}
+                className="bg-white text-[#00B900] px-6 py-3 rounded-2xl font-black text-sm shadow-xl flex items-center gap-2 disabled:opacity-50"
               >
-                確認する <Play size={18} />
+                <Play size={18} /> 確認する
               </button>
-            )}
-
-            {isConfirmed && (
-              <div className="bg-white/20 px-4 py-2 rounded-full text-[10px] font-black flex items-center gap-2">
-                <CheckCircle2 size={14} /> 報告済み
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4 w-full justify-between mt-2">
-            <div className="flex items-center gap-2 bg-black/10 px-3 py-1.5 rounded-full">
-              <Minimize2 size={12} className="opacity-60" />
-              <input 
-                type="range" min="3" max="10" value={gridCols}
-                onChange={(e) => setGridCols(parseInt(e.target.value))}
-                className="w-24 accent-white h-1 cursor-pointer"
-              />
-              <Maximize2 size={12} className="opacity-60" />
             </div>
-            <button onClick={handleReset} className="text-[10px] font-black opacity-60 underline flex items-center gap-1">
-              <RotateCcw size={12} /> リセット
-            </button>
           </div>
         </div>
       </div>
 
-      {/* --- Main Content: Drag & Drop Grid --- */}
-      <div className="max-w-6xl mx-auto p-4 pt-10">
-        <Reorder.Group 
-          axis="y" 
-          values={reorderList} 
-          onReorder={(newOrder) => !isConfirmed && setReorderList(newOrder)}
-          className={cn(
-            "grid gap-2",
-            gridCols === 3 && "grid-cols-3",
-            gridCols === 4 && "grid-cols-4",
-            gridCols === 5 && "grid-cols-5",
-            gridCols === 6 && "grid-cols-6",
-            gridCols === 7 && "grid-cols-7",
-            gridCols === 8 && "grid-cols-8",
-            gridCols === 9 && "grid-cols-9",
-            gridCols === 10 && "grid-cols-10",
-          )}
-        >
-          {reorderList.map((sticker, idx) => {
-            const isMultipleOf8 = (idx + 1) % 8 === 0;
-            return (
-              <Reorder.Item 
-                key={sticker.id} 
-                value={sticker}
-                drag={!isConfirmed}
-                className={cn(
-                  "relative aspect-square bg-white rounded-2xl p-2 shadow-sm border-2 transition-all touch-none",
-                  isConfirmed ? "cursor-default" : "cursor-grab active:cursor-grabbing active:border-[#00B900] active:shadow-2xl",
-                  isMultipleOf8 ? "border-[#00B900]/40 ring-4 ring-[#00B900]/10" : "border-gray-50"
-                )}
-              >
-                <img src={sticker.url} alt="" className="w-full h-full object-contain pointer-events-none" />
-                <div className={cn(
-                  "absolute -bottom-1 -right-1 w-6 h-6 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-lg border-2 border-white",
-                  isMultipleOf8 ? "bg-[#00B900]" : "bg-gray-400"
-                )}>
-                  {idx + 1}
-                </div>
-                {isMultipleOf8 && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-[#00B900] text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">
-                    {idx + 1}枚
+      <div className="max-w-xl mx-auto p-4 space-y-12">
+        {/* --- Area 1: Selected & Reorderable --- */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+              <Sparkles className="text-yellow-500" size={20} />
+              決定したスタンプ（並べ替え可能）
+            </h2>
+            <button onClick={handleReset} className="text-xs font-bold text-slate-400 underline">リセット</button>
+          </div>
+
+          {selectedList.length === 0 ? (
+            <div className="border-4 border-dashed border-slate-200 rounded-[32px] p-12 text-center text-slate-400 font-bold">
+              下のリストから<br/>使いたいスタンプをタップしてね！
+            </div>
+          ) : (
+            <Reorder.Group 
+              axis="y" 
+              values={selectedList} 
+              onReorder={(newOrder) => !isConfirmed && setSelectedList(newOrder)}
+              className="space-y-3"
+            >
+              {selectedList.map((sticker, idx) => (
+                <Reorder.Item 
+                  key={sticker.id} 
+                  value={sticker}
+                  dragListener={!isConfirmed}
+                  className="bg-white rounded-[24px] p-4 flex items-center gap-4 shadow-sm border-2 border-transparent active:border-[#00B900] active:scale-[1.02] transition-all touch-none list-none"
+                >
+                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-400 text-sm">
+                    {idx + 1}
                   </div>
-                )}
-              </Reorder.Item>
-            );
-          })}
-        </Reorder.Group>
+                  <div className="flex-1 h-32 flex items-center justify-center bg-slate-50 rounded-2xl">
+                    <img src={sticker.url} alt="" className="h-full object-contain p-2 pointer-events-none" />
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    <div className="p-2 cursor-grab active:cursor-grabbing text-slate-300">
+                      <GripVertical size={24} />
+                    </div>
+                    <button 
+                      onClick={() => removeFromSelected(sticker)}
+                      className="p-2 text-red-400 hover:bg-red-50 rounded-full"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          )}
+        </section>
+
+        {/* --- Area 2: Unselected Pool --- */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-black text-slate-800 px-2 flex items-center gap-2">
+            <Plus className="text-[#00B900]" size={20} />
+            スタンプをえらぶ（タップして追加）
+          </h2>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 bg-white p-4 rounded-[32px] shadow-inner border-2 border-slate-100">
+            {unselectedList.map(sticker => (
+              <motion.button
+                key={sticker.id}
+                layout
+                whileTap={{ scale: 0.9 }}
+                onClick={() => addToSelected(sticker)}
+                className="aspect-square bg-slate-50 rounded-xl p-1.5 border-2 border-transparent hover:border-[#00B900]/30 transition-all flex items-center justify-center relative group"
+              >
+                <img src={sticker.url} alt="" className="w-full h-full object-contain" />
+                <div className="absolute inset-0 bg-[#00B900]/0 group-hover:bg-[#00B900]/10 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100">
+                  <Plus className="text-[#00B900]" size={20} />
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* --- Slideshow Page --- */}
       <AnimatePresence>
         {stage === 'slideshow' && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed inset-0 z-[100] bg-white flex flex-col"
-          >
-            <div className="p-4 flex items-center justify-between border-b border-gray-100 pt-14 pb-4">
-              <button onClick={() => setStage('main')} className="w-12 h-12 text-gray-400 flex items-center justify-center bg-gray-50 rounded-2xl active:scale-90">
-                <ChevronLeft size={28} />
+          <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="fixed inset-0 z-[100] bg-white flex flex-col">
+            <div className="p-6 flex items-center justify-between border-b pt-14">
+              <button onClick={() => setStage('main')} className="p-2 bg-slate-100 rounded-2xl"><ChevronLeft size={28} /></button>
+              <div className="text-center">
+                <div className="font-black text-[#00B900]">最終チェック</div>
+                <div className="text-[10px] font-bold text-slate-400">{slideshowIndex + 1} / {selectedList.length}</div>
+              </div>
+              <button onClick={handleNotifyTeacher} className="px-6 py-2 bg-[#00B900] text-white rounded-2xl font-black text-sm shadow-lg flex items-center gap-2">
+                <Send size={18} /> 報告
               </button>
-              <div className="flex flex-col items-center">
-                <div className="text-xl font-black text-[#00B900]">最終チェック</div>
-                <div className="text-[10px] font-bold text-gray-400 bg-gray-50 px-3 py-1 rounded-full mt-1">
-                  {slideshowIndex + 1} / {reorderList.length} 枚目
-                </div>
-              </div>
-              {!isConfirmed ? (
-                <button 
-                  disabled={isSending}
-                  onClick={handleNotifyTeacher}
-                  className="px-6 py-3 bg-[#00B900] text-white text-sm font-black rounded-2xl shadow-[0_4px_0_#008a00] active:translate-y-[4px] active:shadow-none transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isSending ? <Loader2 size={18} className="animate-spin" /> : <><Send size={18} /> 先生へ報告</>}
-                </button>
-              ) : (
-                <div className="w-12" />
-              )}
             </div>
+            
+            <div className="flex-1 flex flex-col items-center justify-center p-8 relative">
+              <AnimatePresence mode="wait">
+                <motion.div key={selectedList[slideshowIndex]?.id} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="w-full max-w-sm aspect-square bg-slate-50 rounded-[40px] p-12 relative shadow-inner">
+                  <img src={selectedList[slideshowIndex]?.url} alt="" className="w-full h-full object-contain drop-shadow-2xl" />
+                  <div className="absolute -bottom-4 -right-4 bg-[#00B900] text-white w-20 h-20 rounded-full flex items-center justify-center text-4xl font-black shadow-xl border-4 border-white rotate-12">
+                    {slideshowIndex + 1}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-[#00B900]/5 rounded-full blur-3xl" />
-              <div className="relative w-full max-w-sm aspect-square bg-white rounded-[40px] shadow-2xl p-8 border border-gray-50 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={reorderList[slideshowIndex]?.id}
-                    initial={{ opacity: 0, x: 50, rotate: 3 }}
-                    animate={{ opacity: 1, x: 0, rotate: 0 }}
-                    exit={{ opacity: 0, x: -50, rotate: -3 }}
-                    className="w-full h-full flex flex-col items-center justify-center gap-8"
-                  >
-                    <img src={reorderList[slideshowIndex]?.url} alt="" className="max-w-full max-h-[85%] object-contain drop-shadow-2xl" />
-                    <div className="absolute -bottom-2 -right-2 bg-[#00B900] text-white w-20 h-20 rounded-full flex items-center justify-center text-5xl font-black shadow-xl border-4 border-white rotate-12">
-                      {slideshowIndex + 1}
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-
-              <div className="absolute inset-y-0 left-4 right-4 flex items-center justify-between pointer-events-none px-4">
-                <button onClick={() => setSlideshowIndex(prev => Math.max(0, prev - 1))} className={cn("pointer-events-auto w-16 h-16 bg-white shadow-2xl rounded-full flex items-center justify-center text-[#00B900] active:scale-90 transition-all")}>
-                  <ChevronLeft size={40} />
-                </button>
-                <button onClick={() => setSlideshowIndex(prev => Math.min(reorderList.length - 1, prev + 1))} className={cn("pointer-events-auto w-16 h-16 bg-white shadow-2xl rounded-full flex items-center justify-center text-[#00B900] active:scale-90 transition-all")}>
-                  <ChevronRight size={40} />
-                </button>
+              <div className="absolute inset-x-8 flex justify-between top-1/2 -translate-y-1/2 pointer-events-none">
+                <button onClick={() => setSlideshowIndex(prev => Math.max(0, prev - 1))} className="pointer-events-auto p-4 bg-white shadow-2xl rounded-full text-[#00B900]"><ChevronLeft size={40} /></button>
+                <button onClick={() => setSlideshowIndex(prev => Math.min(selectedList.length - 1, prev + 1))} className="pointer-events-auto p-4 bg-white shadow-2xl rounded-full text-[#00B900]"><ChevronRight size={40} /></button>
               </div>
             </div>
 
-            <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex gap-4 overflow-x-auto scrollbar-hide snap-x">
-              {reorderList.map((sticker, i) => (
-                <button key={sticker.id} onClick={() => setSlideshowIndex(i)} className={cn("flex-shrink-0 w-16 h-16 rounded-2xl border-4 transition-all overflow-hidden bg-white snap-center", slideshowIndex === i ? "border-[#00B900] scale-110 shadow-lg" : "border-transparent opacity-40 grayscale")}>
-                  <img src={sticker.url} alt="" className="w-full h-full object-contain p-2" />
+            <div className="p-4 bg-slate-50 flex gap-2 overflow-x-auto scrollbar-hide">
+              {selectedList.map((s, i) => (
+                <button key={s.id} onClick={() => setSlideshowIndex(i)} className={cn("w-14 h-14 rounded-xl border-2 shrink-0 bg-white", slideshowIndex === i ? "border-[#00B900]" : "border-transparent opacity-40")}>
+                  <img src={s.url} alt="" className="w-full h-full object-contain p-1" />
                 </button>
               ))}
             </div>
