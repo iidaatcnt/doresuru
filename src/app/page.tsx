@@ -129,7 +129,7 @@ export default function Home() {
             text="40個のスタンプをえらぼう！" 
           />
           
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
             {stickers.map((sticker) => {
               const isSelected = selectedIds.includes(sticker.id);
               const isDisabled = !isSelected && selectedIds.length >= REQUIRED_SELECTION;
@@ -138,32 +138,42 @@ export default function Home() {
                 <motion.div
                   key={sticker.id}
                   layout
-                  whileTap={{ scale: 0.92 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => toggleSelection(sticker.id)}
                   className={cn(
-                    "relative aspect-square rounded-3xl p-3 cursor-pointer transition-all duration-500",
+                    "relative aspect-square rounded-[32px] p-4 cursor-pointer transition-all duration-500",
                     isSelected 
-                      ? "bg-white shadow-[0_20px_40px_-12px_rgba(255,107,107,0.4)] ring-4 ring-[#FF6B6B] scale-105 z-10" 
-                      : "bg-white/70 backdrop-blur-sm border-2 border-white hover:bg-white hover:shadow-xl",
-                    isDisabled && "opacity-30 grayscale saturate-0 pointer-events-none"
+                      ? "bg-white shadow-[0_24px_48px_-12px_rgba(255,107,107,0.4)] ring-[6px] ring-[#FF6B6B] scale-105 z-10" 
+                      : "bg-white/80 backdrop-blur-sm border-2 border-white hover:bg-white hover:shadow-2xl",
+                    isDisabled && "opacity-20 grayscale saturate-0 pointer-events-none"
                   )}
                 >
-                  <img src={sticker.url} alt="" className="w-full h-full object-contain mb-2" />
+                  <div className="w-full h-full flex items-center justify-center p-2 bg-slate-50/50 rounded-2xl relative overflow-hidden group">
+                    <img 
+                      src={sticker.url} 
+                      alt="" 
+                      className="max-w-full max-h-full object-contain drop-shadow-lg transform transition-transform group-hover:scale-110 duration-300" 
+                    />
+                  </div>
                   
                   {sticker.recommended && (
-                    <div className="absolute -top-3 -left-2 bg-[#FFE66D] text-slate-800 px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 shadow-lg border-2 border-white transform -rotate-12">
-                      <Star size={12} fill="currentColor" className="text-orange-500" />
-                      おすすめ！
+                    <div className="absolute -top-4 -left-3 bg-[#FFE66D] text-slate-900 px-4 py-1.5 rounded-full text-[12px] font-black flex items-center gap-1.5 shadow-xl border-4 border-white transform -rotate-12 z-20">
+                      <Star size={14} fill="currentColor" className="text-orange-500" />
+                      おすすめ
                     </div>
                   )}
                   
-                  <div className="absolute bottom-2 right-2">
+                  <div className="absolute -top-2 -right-2">
                     {isSelected ? (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                        <CheckCircle2 className="text-[#FF6B6B]" size={28} fill="white" />
+                      <motion.div 
+                        initial={{ scale: 0, rotate: -20 }} 
+                        animate={{ scale: 1, rotate: 0 }}
+                        className="bg-[#FF6B6B] rounded-full p-1.5 shadow-lg border-4 border-white"
+                      >
+                        <CheckCircle2 className="text-white" size={24} />
                       </motion.div>
                     ) : (
-                      <div className="w-6 h-6 rounded-full border-2 border-slate-200 bg-white/50" />
+                      <div className="w-8 h-8 rounded-full border-4 border-slate-100 bg-white shadow-inner" />
                     )}
                   </div>
                 </motion.div>
