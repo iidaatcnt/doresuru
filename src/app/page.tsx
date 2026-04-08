@@ -239,13 +239,16 @@ export default function Home() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -50 }}
                     transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                    className="w-full h-full flex items-center justify-center"
+                    className="w-full h-full flex flex-col items-center justify-center gap-6"
                   >
                     <img 
                       src={reorderList[slideshowIndex].url} 
                       alt="" 
-                      className="max-w-full max-h-full object-contain" 
+                      className="max-w-full max-h-[80%] object-contain drop-shadow-2xl" 
                     />
+                    <div className="text-gray-400 text-sm font-mono bg-gray-50 px-3 py-1 rounded">
+                      {reorderList[slideshowIndex].url.split('/').slice(-2).join('/')}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -273,8 +276,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="p-4 bg-gray-50 border-t border-gray-100 mb-4">
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+          <div className="p-6 bg-gray-50 border-t border-gray-100 mb-4 flex flex-col gap-4">
+            <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide snap-x">
               {reorderList.map((sticker, i) => (
                 <button
                   key={sticker.id}
@@ -290,6 +293,23 @@ export default function Home() {
                 </button>
               ))}
             </div>
+
+            {slideshowIndex === REQUIRED_SELECTION - 1 && (
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => {
+                  const filenames = reorderList.map(s => s.url.split('/').slice(-2).join('/')).join('\n');
+                  const subject = encodeURIComponent("選んだスタンプのリスト");
+                  const body = encodeURIComponent(`選んだ40個のスタンプリストです：\n\n${filenames}`);
+                  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                }}
+                className="w-full py-4 bg-[#00B900] text-white rounded-full font-black text-xl shadow-xl flex items-center justify-center gap-2 hover:bg-[#00A000] active:scale-95 transition-all"
+              >
+                <CheckCircle2 size={24} />
+                リストをメールで送る
+              </motion.button>
+            )}
           </div>
         </div>
       )}
