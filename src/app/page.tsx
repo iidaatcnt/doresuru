@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../lib/supabase';
 import { 
   CheckCircle2, 
   ArrowRight, 
@@ -40,7 +39,7 @@ type Stage = 'selection' | 'reordering' | 'slideshow';
 
 // --- Constants ---
 const REQUIRED_SELECTION = 40;
-const DEFAULT_USER = "Gakusei"; // ログインなしのデフォルト名
+const DEFAULT_USER = "Gakusei"; 
 
 const categories = [
   { id: 'aisatsu', name: 'あいさつ', color: 'bg-blue-500' },
@@ -79,15 +78,17 @@ export default function Home() {
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
-  // Load Initial State
+  // Load Initial State from Supabase
   useEffect(() => {
     const initApp = async () => {
       try {
-        const docRef = doc(db, 'selections', DEFAULT_USER);
-        const docSnap = await getDoc(docRef);
+        const { data, error } = await supabase
+          .from('sticker_selections')
+          .select('*')
+          .eq('nickname', DEFAULT_USER)
+          .single();
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        if (data) {
           setSelectedIds(data.selected_ids || []);
           if (data.reorder_list && Array.isArray(data.reorder_list)) {
             setReorderList(data.reorder_list);
@@ -107,20 +108,19 @@ export default function Home() {
     initApp();
   }, []);
 
-  // Sync to Firebase
-  const syncToFirebase = async (forceConfirmed?: boolean) => {
+  // Sync to Supabase
+  const syncToSupabase = async (forceConfirmed?: boolean) => {
     if (!isInitialized || isSyncing) return;
     setIsSyncing(true);
 
     try {
-      const docRef = doc(db, 'selections', DEFAULT_USER);
-      await setDoc(docRef, {
+      await supabase.from('sticker_selections').upsert({
         nickname: DEFAULT_USER,
         selected_ids: selectedIds,
         reorder_list: reorderList.length > 0 ? reorderList : [],
         is_confirmed: forceConfirmed !== undefined ? forceConfirmed : isConfirmed,
-        updated_at: serverTimestamp()
-      }, { merge: true });
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'nickname' });
     } catch (err) {
       console.error('Sync error:', err);
     } finally {
@@ -130,7 +130,7 @@ export default function Home() {
 
   useEffect(() => {
     if (isInitialized) {
-      const timer = setTimeout(() => syncToFirebase(), 2000);
+      const timer = setTimeout(() => syncToSupabase(), 2000);
       return () => clearTimeout(timer);
     }
   }, [selectedIds, reorderList, isConfirmed, isInitialized]);
@@ -167,7 +167,7 @@ export default function Home() {
     if (message === null) return;
 
     setIsConfirmed(true);
-    await syncToFirebase(true);
+    await syncToSupabase(true);
 
     const filenames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
     const subject = encodeURIComponent(`【スタンプ確定】報告：40個選びました`);
@@ -186,7 +186,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] pb-20">
-      {/* --- Elegant Top Bar --- */}
+      {/* Top Bar Navigation */}
       <div className="sticky top-0 left-0 w-full bg-[#00B900] z-[80] shadow-xl text-white">
         <div className="max-w-xl mx-auto px-6 py-6 flex flex-col items-center gap-4">
           <div className="flex w-full justify-between items-center text-[10px] font-black opacity-70 uppercase tracking-tighter">
@@ -208,7 +208,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Action Buttons in Top Bar */}
             <div className="flex flex-col gap-2">
               {stage === 'selection' && selectedIds.length === REQUIRED_SELECTION && !isConfirmed && (
                 <button 
@@ -248,7 +247,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* --- Main Content --- */}
+      {/* Main Grid */}
       <div className="max-w-4xl mx-auto p-4 pt-8">
         {stage === 'selection' && (
           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2 pb-40">
@@ -262,7 +261,7 @@ export default function Home() {
                   onClick={() => toggleSelection(sticker.id)}
                   className={cn(
                     "relative aspect-square rounded-xl p-1 bg-white border cursor-pointer transition-all duration-200",
-                    isSelected ? "border-gray-100 shadow-sm" : "border-red-500/30 bg-gray-100 opacity-40grayscale",
+                    isSelected ? "border-gray-100 shadow-sm" : "border-red-500/30 bg-gray-100 opacity-40 grayscale",
                   )}
                 >
                   <img src={sticker.url} alt="" className="w-full h-full object-contain p-1" />
@@ -307,7 +306,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* --- Slideshow Overly (Full Screen) --- */}
+      {/* Slideshow Overlay */}
       {stage === 'slideshow' && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col">
           <div className="p-4 flex items-center justify-between border-b border-gray-100 pt-12">
