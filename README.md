@@ -1,36 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LINEスタンプ ならびかえアプリ (doresuru)
 
-## Getting Started
+小学5年生がLINEスタンプ40個を選んで並べ替え、先生に報告するためのWebアプリです。
 
-First, run the development server:
+## 概要
+- **対象**: 小学校5年生
+- **目的**: 48枚の候補から40枚を選び、最適な順番に並べ替える
+- **特徴**: LINE風の親しみやすいUI、スマホでの直感的な操作、リアルタイム保存機能
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 主な機能
+1. **スタンプ選別**: 48枚の候補からタップでボツ（除外）を選び、40枚に絞り込む。
+2. **ドラッグ＆ドロップ並べ替え**: 40枚の順番を自由に入れ替える。
+3. **フルスクリーンスライドショー**: 決めた順番を1枚ずつ大きな画像で最終チェック。
+4. **先生への報告**: 確定したリストとメッセージをメールで送信。
+5. **リアルタイム保存**: Supabaseとの連携により、作業状況を自動でクラウドに保存。
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 技術スタック
+- **Frontend**: Next.js (App Router), Tailwind CSS
+- **Animation**: Framer Motion
+- **Icons**: Lucide React
+- **Backend**: Supabase (Database)
+- **Deployment**: Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## ライセンス
+Private Project
