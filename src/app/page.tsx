@@ -259,22 +259,22 @@ export default function Home() {
 
   if (stage === 'login') {
     return (
-      <div className="min-h-screen bg-[#00B900] flex items-center justify-center p-6">
+      <div className="fixed inset-0 bg-[#00B900] flex items-center justify-center p-6 px-4 overflow-y-auto">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-sm bg-white rounded-[40px] p-10 shadow-2xl overflow-hidden relative"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-[340px] bg-white rounded-[40px] p-8 pb-10 shadow-[0_20px_50px_rgba(0,0,0,0.2)] relative"
         >
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-orange-400" />
           
           <div className="flex flex-col items-center text-center gap-6">
-            <div className="w-24 h-24 bg-[#00B900]/10 rounded-full flex items-center justify-center text-[#00B900]">
-              <User size={50} />
+            <div className="w-20 h-20 bg-[#f0f9f0] rounded-full flex items-center justify-center text-[#00B900] mt-2">
+              <User size={40} />
             </div>
             
-            <div>
-              <h1 className="text-3xl font-black text-slate-800 mb-2">ログイン</h1>
-              <p className="text-slate-500 text-sm font-medium">なまえを入力してね！</p>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-black text-slate-800">ログイン</h1>
+              <p className="text-slate-500 text-xs font-bold">なまえを入力してね！</p>
             </div>
 
             <div className="w-full space-y-4">
@@ -282,14 +282,15 @@ export default function Home() {
                 type="text" 
                 value={inputName}
                 onChange={(e) => setInputName(e.target.value)}
-                placeholder="なまえを入力..."
-                className="w-full px-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-[#00B900] focus:ring-4 focus:ring-[#00B900]/10 outline-none transition-all text-lg font-bold text-center"
+                autoFocus
+                placeholder="なまえ"
+                className="w-full px-4 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:border-[#00B900] focus:bg-white outline-none transition-all text-lg font-black text-center text-slate-800 placeholder:text-gray-300 shadow-inner"
               />
               
               <button
                 disabled={!inputName.trim() || isLoading}
                 onClick={() => handleLogin(inputName)}
-                className="w-full py-5 bg-[#00B900] text-white rounded-2xl font-black text-xl shadow-xl hover:bg-[#00A000] active:scale-110 active:shadow-inner transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                className="w-full py-4 bg-[#00B900] text-white rounded-2xl font-black text-xl shadow-[0_8px_0_#008a00] hover:shadow-[0_4px_0_#008a00] active:shadow-none hover:translate-y-[2px] active:translate-y-[8px] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
               >
                 {isLoading ? (
                   <Loader2 className="animate-spin" />
