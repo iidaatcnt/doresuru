@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { 
   CheckCircle2, 
   ArrowRight, 
@@ -66,7 +67,7 @@ const initialStickers: Sticker[] = stickerPaths.map((path, i) => {
 
 // --- Components ---
 
-const ProgressBar = ({ current, total, text, onReset, isConfirmed, nickname }: { current: number; total: number; text: string; onReset?: () => void; isConfirmed?: boolean; nickname?: string }) => (
+const ProgressBar = ({ current, total, text, onReset, isConfirmed, nickname, isSyncing }: { current: number; total: number; text: string; onReset?: () => void; isConfirmed?: boolean; nickname?: string; isSyncing?: boolean }) => (
   <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-6 pt-12 pb-8 shadow-2xl border-b-4 border-white/30">
     <div className="max-w-xl mx-auto flex flex-col gap-4">
       <div className="flex justify-between items-center text-white/80 mb-2">
@@ -75,8 +76,17 @@ const ProgressBar = ({ current, total, text, onReset, isConfirmed, nickname }: {
           {nickname || 'ゲスト'}
         </div>
         <div className="flex items-center gap-1.5 text-[10px] font-black">
-          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-          同期中
+          {isSyncing ? (
+            <>
+              <Loader2 size={12} className="animate-spin" />
+              同期中...
+            </>
+          ) : (
+            <>
+              <div className="w-1.5 h-1.5 bg-white/50 rounded-full" />
+              保存済み
+            </>
+          )}
         </div>
       </div>
 
@@ -120,6 +130,7 @@ export default function Home() {
   const [nickname, setNickname] = useState('');
   const [inputName, setInputName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const [stickers] = useState<Sticker[]>(initialStickers);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -140,20 +151,20 @@ export default function Home() {
     setIsLoading(true);
     
     try {
-      const { data, error } = await supabase
-        .from('sticker_selections')
-        .select('*')
-        .eq('nickname', nameToLogin)
-        .single();
+      // Firebase Firestoreからデータを取得
+      const docRef = doc(db, 'selections', nameToLogin);
+      const docSnap = await getDoc(docRef);
 
-      if (data) {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
         setSelectedIds(data.selected_ids || []);
         if (data.reorder_list && Array.isArray(data.reorder_list)) {
           setReorderList(data.reorder_list);
         }
-        setIsConfirmed(data.is_confirmed);
+        setIsConfirmed(data.is_confirmed || false);
         setStage(data.is_confirmed ? 'slideshow' : 'selection');
       } else {
+        // 新規ユーザー
         setSelectedIds(initialStickers.map(s => s.id));
         setStage('selection');
       }
@@ -170,25 +181,31 @@ export default function Home() {
     }
   };
 
-  const syncToSupabase = async (forceConfirmed = false) => {
+  // Sync data to Firebase
+  const syncToFirebase = async (forceConfirmed = false) => {
     if (!nickname || isLoading) return;
+    setIsSyncing(true);
 
     try {
-      await supabase.from('sticker_selections').upsert({
+      const docRef = doc(db, 'selections', nickname);
+      await setDoc(docRef, {
         nickname,
         selected_ids: selectedIds,
-        reorder_list: reorderList.length > 0 ? reorderList : undefined,
+        reorder_list: reorderList.length > 0 ? reorderList : [],
         is_confirmed: forceConfirmed || isConfirmed,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'nickname' });
+        updated_at: serverTimestamp()
+      }, { merge: true });
     } catch (err) {
       console.error('Sync error:', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
+  // Auto-sync when state changes
   useEffect(() => {
     if (nickname && stage !== 'login') {
-      const timer = setTimeout(() => syncToSupabase(), 1000);
+      const timer = setTimeout(() => syncToFirebase(), 1500);
       return () => clearTimeout(timer);
     }
   }, [selectedIds, reorderList, isConfirmed, nickname, stage]);
@@ -225,7 +242,7 @@ export default function Home() {
     if (message === null) return;
 
     setIsConfirmed(true);
-    await syncToSupabase(true);
+    await syncToFirebase(true);
 
     const filenames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
     const subject = encodeURIComponent(`【スタンプ確定】報告：${nickname}さんが40個選びました`);
@@ -301,6 +318,7 @@ export default function Home() {
             onReset={handleReset}
             isConfirmed={isConfirmed}
             nickname={nickname}
+            isSyncing={isSyncing}
           />
           
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-3">
@@ -358,6 +376,7 @@ export default function Home() {
             onReset={handleReset}
             isConfirmed={isConfirmed}
             nickname={nickname}
+            isSyncing={isSyncing}
           />
           
           <div className="mb-6 bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between font-sans">
