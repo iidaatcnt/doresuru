@@ -104,21 +104,26 @@ const ProgressBar = ({ current, total, text, onReset, isConfirmed, nickname, isS
           <span className="text-3xl font-bold opacity-50">/ {total}</span>
         </div>
         
-        {!isConfirmed && onReset && (
-          <button 
-            onClick={onReset}
-            className="mt-4 px-6 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-black rounded-full border border-white/50 transition-all flex items-center gap-2"
+        {!isConfirmed && current > total && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-2 bg-yellow-400 text-slate-900 px-6 py-2 rounded-full text-sm font-black animate-bounce shadow-xl flex items-center gap-2 border-2 border-white"
           >
-            <RotateCcw size={14} />
-            最初からやりなおす
-          </button>
+            <X size={16} />
+            あと {current - total} 個タップしてボツにしよう！
+          </motion.div>
         )}
 
-        {isConfirmed && (
-          <div className="mt-4 bg-white text-[#00B900] px-6 py-2 rounded-full text-sm font-black shadow-xl flex items-center gap-2">
-            <CheckCircle2 size={18} />
-            えらびおわったよ！（確定済み）
-          </div>
+        {!isConfirmed && current === total && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-2 bg-white text-[#00B900] px-6 py-2 rounded-full text-sm font-black shadow-xl flex items-center gap-2 border-2 border-[#00B900]"
+          >
+            <Sparkles size={16} className="text-yellow-400" />
+            ちょうど40個！下のボタンでつぎへ進もう！
+          </motion.div>
         )}
       </div>
     </div>
