@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 import { 
   CheckCircle2, 
   ArrowRight, 
@@ -11,7 +12,10 @@ import {
   Sparkles,
   Trophy,
   X,
-  RotateCcw
+  RotateCcw,
+  User,
+  CloudUpload,
+  Loader2
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -29,7 +33,7 @@ interface Sticker {
   category: string;
 }
 
-type Stage = 'selection' | 'reordering' | 'slideshow';
+type Stage = 'login' | 'selection' | 'reordering' | 'slideshow';
 
 // --- Assets ---
 const categories = [
@@ -62,9 +66,20 @@ const initialStickers: Sticker[] = stickerPaths.map((path, i) => {
 
 // --- Components ---
 
-const ProgressBar = ({ current, total, text, onReset, isConfirmed }: { current: number; total: number; text: string; onReset?: () => void; isConfirmed?: boolean }) => (
+const ProgressBar = ({ current, total, text, onReset, isConfirmed, nickname }: { current: number; total: number; text: string; onReset?: () => void; isConfirmed?: boolean; nickname?: string }) => (
   <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-6 pt-12 pb-8 shadow-2xl border-b-4 border-white/30">
     <div className="max-w-xl mx-auto flex flex-col gap-4">
+      <div className="flex justify-between items-center text-white/80 mb-2">
+        <div className="flex items-center gap-2 bg-black/10 px-3 py-1 rounded-full text-[10px] font-black uppercase">
+          <User size={12} />
+          {nickname || 'ゲスト'}
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] font-black">
+          <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+          同期中
+        </div>
+      </div>
+
       <div className="flex flex-col items-center justify-center text-white gap-2">
         <span className="text-sm font-black opacity-90 tracking-widest uppercase">{text}</span>
         <div className="flex items-baseline gap-3">
@@ -95,56 +110,92 @@ const ProgressBar = ({ current, total, text, onReset, isConfirmed }: { current: 
             えらびおわったよ！（確定済み）
           </div>
         )}
-
-        {!isConfirmed && current > total && (
-          <div className="mt-2 bg-yellow-400 text-slate-900 px-6 py-1.5 rounded-full text-sm font-black animate-bounce shadow-xl">
-            あと {current - total} 個ボツにしよう！
-          </div>
-        )}
       </div>
     </div>
   </div>
 );
 
 export default function Home() {
-  const [stage, setStage] = useState<Stage>('selection');
+  const [stage, setStage] = useState<Stage>('login');
+  const [nickname, setNickname] = useState('');
+  const [inputName, setInputName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  
   const [stickers] = useState<Sticker[]>(initialStickers);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reorderList, setReorderList] = useState<Sticker[]>([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(false);
 
-  // Load state from localStorage
+  // Auto-login if nickname is in localStorage
   useEffect(() => {
-    const savedIds = localStorage.getItem('selected_stickers');
-    const confirmed = localStorage.getItem('is_confirmed') === 'true';
-    if (savedIds) {
-      try {
-        const ids = JSON.parse(savedIds);
-        setSelectedIds(ids);
-      } catch (e) {
-        setSelectedIds(initialStickers.map(s => s.id));
-      }
-      if (confirmed) {
-        setIsConfirmed(true);
-        setStage('slideshow');
-      }
-    } else {
-      setSelectedIds(initialStickers.map(s => s.id));
+    const savedName = localStorage.getItem('doresuru_nickname');
+    if (savedName) {
+      handleLogin(savedName);
     }
   }, []);
 
-  // Save state
-  useEffect(() => {
-    if (!isConfirmed && selectedIds.length > 0) {
-      localStorage.setItem('selected_stickers', JSON.stringify(selectedIds));
+  const handleLogin = async (nameToLogin: string) => {
+    if (!nameToLogin.trim()) return;
+    setIsLoading(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('sticker_selections')
+        .select('*')
+        .eq('nickname', nameToLogin)
+        .single();
+
+      if (data) {
+        setSelectedIds(data.selected_ids || []);
+        if (data.reorder_list && Array.isArray(data.reorder_list)) {
+          setReorderList(data.reorder_list);
+        }
+        setIsConfirmed(data.is_confirmed);
+        setStage(data.is_confirmed ? 'slideshow' : 'selection');
+      } else {
+        setSelectedIds(initialStickers.map(s => s.id));
+        setStage('selection');
+      }
+
+      setNickname(nameToLogin);
+      localStorage.setItem('doresuru_nickname', nameToLogin);
+    } catch (err) {
+      console.error('Login error:', err);
+      setNickname(nameToLogin);
+      setStage('selection');
+      setSelectedIds(initialStickers.map(s => s.id));
+    } finally {
+      setIsLoading(false);
     }
-  }, [selectedIds, isConfirmed]);
+  };
+
+  const syncToSupabase = async (forceConfirmed = false) => {
+    if (!nickname || isLoading) return;
+
+    try {
+      await supabase.from('sticker_selections').upsert({
+        nickname,
+        selected_ids: selectedIds,
+        reorder_list: reorderList.length > 0 ? reorderList : undefined,
+        is_confirmed: forceConfirmed || isConfirmed,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'nickname' });
+    } catch (err) {
+      console.error('Sync error:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (nickname && stage !== 'login') {
+      const timer = setTimeout(() => syncToSupabase(), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedIds, reorderList, isConfirmed, nickname, stage]);
 
   useEffect(() => {
     if (stage === 'reordering' || stage === 'slideshow') {
       const selected = stickers.filter(s => selectedIds.includes(s.id));
-      // Re-order mapping to handle case where reordering was already done
       if (reorderList.length !== REQUIRED_SELECTION) {
         setReorderList(selected);
       }
@@ -154,9 +205,7 @@ export default function Home() {
   const toggleSelection = (id: string) => {
     if (isConfirmed) return;
     setSelectedIds(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(i => i !== id);
-      }
+      if (prev.includes(id)) return prev.filter(i => i !== id);
       if (prev.length >= stickers.length) return prev;
       return [...prev, id];
     });
@@ -166,27 +215,83 @@ export default function Home() {
     if (confirm("最初からやり直しますか？")) {
       setSelectedIds(initialStickers.map(s => s.id));
       setStage('selection');
-      localStorage.removeItem('is_confirmed');
       setIsConfirmed(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  const handleNotifyTeacher = () => {
+  const handleNotifyTeacher = async () => {
     const message = prompt("先生へのひとことメッセージを入力してください：", "40個選びました！よろしくお願いします。");
     if (message === null) return;
 
-    const filenames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
-    const subject = encodeURIComponent("【スタンプ確定】報告：40個選びました");
-    const body = encodeURIComponent(`先生へ\n\n${message}\n\n■選んだスタンプリスト：\n${filenames}`);
-    
     setIsConfirmed(true);
-    localStorage.setItem('is_confirmed', 'true');
+    await syncToSupabase(true);
+
+    const filenames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
+    const subject = encodeURIComponent(`【スタンプ確定】報告：${nickname}さんが40個選びました`);
+    const body = encodeURIComponent(`先生へ\n\nニックネーム: ${nickname}\n\n${message}\n\n■選んだスタンプリスト：\n${filenames}`);
+    
     window.location.href = `mailto:miidacnt@gmail.com?subject=${subject}&body=${body}`;
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('doresuru_nickname');
+    setNickname('');
+    setStage('login');
+  };
+
+  if (stage === 'login') {
+    return (
+      <div className="min-h-screen bg-[#00B900] flex items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-sm bg-white rounded-[40px] p-10 shadow-2xl overflow-hidden relative"
+        >
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-orange-400" />
+          
+          <div className="flex flex-col items-center text-center gap-6">
+            <div className="w-24 h-24 bg-[#00B900]/10 rounded-full flex items-center justify-center text-[#00B900]">
+              <User size={50} />
+            </div>
+            
+            <div>
+              <h1 className="text-3xl font-black text-slate-800 mb-2">ログイン</h1>
+              <p className="text-slate-500 text-sm font-medium">なまえを入力してね！</p>
+            </div>
+
+            <div className="w-full space-y-4">
+              <input 
+                type="text" 
+                value={inputName}
+                onChange={(e) => setInputName(e.target.value)}
+                placeholder="なまえを入力..."
+                className="w-full px-6 py-4 bg-gray-50 border-2 border-gray-100 rounded-2xl focus:border-[#00B900] focus:ring-4 focus:ring-[#00B900]/10 outline-none transition-all text-lg font-bold text-center"
+              />
+              
+              <button
+                disabled={!inputName.trim() || isLoading}
+                onClick={() => handleLogin(inputName)}
+                className="w-full py-5 bg-[#00B900] text-white rounded-2xl font-black text-xl shadow-xl hover:bg-[#00A000] active:scale-110 active:shadow-inner transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <>
+                    <span>スタート！</span>
+                    <ArrowRight size={24} />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen pb-40 pt-60 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
+    <div className="min-h-screen pb-40 pt-72 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
       {stage === 'selection' && (
         <div className="max-w-4xl mx-auto">
           <ProgressBar 
@@ -195,6 +300,7 @@ export default function Home() {
             text="えらんだ数" 
             onReset={handleReset}
             isConfirmed={isConfirmed}
+            nickname={nickname}
           />
           
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-3">
@@ -251,6 +357,7 @@ export default function Home() {
             text="並べ替え" 
             onReset={handleReset}
             isConfirmed={isConfirmed}
+            nickname={nickname}
           />
           
           <div className="mb-6 bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between font-sans">
@@ -293,12 +400,12 @@ export default function Home() {
               onClick={() => isConfirmed ? (setStage('selection'), window.scrollTo(0,0)) : setStage('reordering')}
               className="w-10 h-10 bg-gray-50 text-gray-500 rounded-full flex items-center justify-center transition-all active:scale-90"
             >
-              {isConfirmed ? <X size={24} /> : <X size={24} />}
+              <X size={24} />
             </button>
             <div className="flex flex-col items-center">
               <div className="text-xl font-black text-[#00B900]">スライドショー</div>
               <div className="text-xs font-bold text-gray-400">
-                {slideshowIndex + 1} / {REQUIRED_SELECTION}
+                {nickname} さん | {slideshowIndex + 1} / {REQUIRED_SELECTION}
               </div>
             </div>
             {!isConfirmed ? (
@@ -309,9 +416,12 @@ export default function Home() {
                 先生に知らせる
               </button>
             ) : (
-              <div className="px-4 py-2 bg-gray-100 text-gray-400 text-[10px] font-black rounded-lg">
-                報告済み
-              </div>
+              <button 
+                onClick={handleLogout}
+                className="px-4 py-2 bg-gray-100 text-gray-400 text-[10px] font-black rounded-lg"
+              >
+                ログアウト
+              </button>
             )}
           </div>
 
