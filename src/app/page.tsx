@@ -10,7 +10,8 @@ import {
   ChevronRight,
   Sparkles,
   Trophy,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -61,23 +62,43 @@ const initialStickers: Sticker[] = stickerPaths.map((path, i) => {
 
 // --- Components ---
 
-const ProgressBar = ({ current, total, text }: { current: number; total: number; text: string }) => (
-  <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-6 pt-12 pb-6 shadow-xl border-b border-white/20">
+const ProgressBar = ({ current, total, text, onReset, isConfirmed }: { current: number; total: number; text: string; onReset?: () => void; isConfirmed?: boolean }) => (
+  <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-6 pt-12 pb-8 shadow-2xl border-b-4 border-white/30">
     <div className="max-w-xl mx-auto flex flex-col gap-4">
-      <div className="flex flex-col items-center justify-center text-white gap-1">
-        <span className="text-xs font-black opacity-80 tracking-widest uppercase">{text}</span>
-        <div className="flex items-baseline gap-2">
-          <span className="text-5xl font-black tabular-nums">{current}</span>
-          <span className="text-xl font-bold opacity-60">/ {total}</span>
+      <div className="flex flex-col items-center justify-center text-white gap-2">
+        <span className="text-sm font-black opacity-90 tracking-widest uppercase">{text}</span>
+        <div className="flex items-baseline gap-3">
+          <motion.span 
+            key={current}
+            initial={{ scale: 1.2, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-7xl font-black tabular-nums drop-shadow-lg"
+          >
+            {current}
+          </motion.span>
+          <span className="text-3xl font-bold opacity-50">/ {total}</span>
         </div>
-        {current > total && (
-          <div className="mt-2 bg-yellow-400 text-slate-900 px-4 py-1 rounded-full text-xs font-black animate-bounce shadow-lg">
-            あと {current - total} 個ボツにしよう！
+        
+        {!isConfirmed && onReset && (
+          <button 
+            onClick={onReset}
+            className="mt-4 px-6 py-2 bg-white/20 hover:bg-white/30 text-white text-xs font-black rounded-full border border-white/50 transition-all flex items-center gap-2"
+          >
+            <RotateCcw size={14} />
+            最初からやりなおす
+          </button>
+        )}
+
+        {isConfirmed && (
+          <div className="mt-4 bg-white text-[#00B900] px-6 py-2 rounded-full text-sm font-black shadow-xl flex items-center gap-2">
+            <CheckCircle2 size={18} />
+            えらびおわったよ！（確定済み）
           </div>
         )}
-        {current === total && (
-          <div className="mt-2 bg-white text-[#00B900] px-4 py-1 rounded-full text-xs font-black shadow-lg">
-            ちょうど40個！バッチリだよ！
+
+        {!isConfirmed && current > total && (
+          <div className="mt-2 bg-yellow-400 text-slate-900 px-6 py-1.5 rounded-full text-sm font-black animate-bounce shadow-xl">
+            あと {current - total} 個ボツにしよう！
           </div>
         )}
       </div>
@@ -88,47 +109,92 @@ const ProgressBar = ({ current, total, text }: { current: number; total: number;
 export default function Home() {
   const [stage, setStage] = useState<Stage>('selection');
   const [stickers] = useState<Sticker[]>(initialStickers);
-  // 全て選択された状態で初期化
-  const [selectedIds, setSelectedIds] = useState<string[]>(initialStickers.map(s => s.id));
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reorderList, setReorderList] = useState<Sticker[]>([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  // Load state from localStorage
+  useEffect(() => {
+    const savedIds = localStorage.getItem('selected_stickers');
+    const confirmed = localStorage.getItem('is_confirmed') === 'true';
+    if (savedIds) {
+      try {
+        const ids = JSON.parse(savedIds);
+        setSelectedIds(ids);
+      } catch (e) {
+        setSelectedIds(initialStickers.map(s => s.id));
+      }
+      if (confirmed) {
+        setIsConfirmed(true);
+        setStage('slideshow');
+      }
+    } else {
+      setSelectedIds(initialStickers.map(s => s.id));
+    }
+  }, []);
+
+  // Save state
+  useEffect(() => {
+    if (!isConfirmed && selectedIds.length > 0) {
+      localStorage.setItem('selected_stickers', JSON.stringify(selectedIds));
+    }
+  }, [selectedIds, isConfirmed]);
 
   useEffect(() => {
-    if (stage === 'reordering') {
+    if (stage === 'reordering' || stage === 'slideshow') {
       const selected = stickers.filter(s => selectedIds.includes(s.id));
-      setReorderList(prev => prev.length === REQUIRED_SELECTION ? prev : selected);
+      // Re-order mapping to handle case where reordering was already done
+      if (reorderList.length !== REQUIRED_SELECTION) {
+        setReorderList(selected);
+      }
     }
-  }, [stage, stickers, selectedIds]);
+  }, [stage, stickers, selectedIds, reorderList.length]);
 
   const toggleSelection = (id: string) => {
+    if (isConfirmed) return;
     setSelectedIds(prev => {
       if (prev.includes(id)) {
-        // すでに選ばれているものをタップしたら除外（ボツ）にする
         return prev.filter(i => i !== id);
       }
-      // 除外されているものをタップしたら再選択
       if (prev.length >= stickers.length) return prev;
       return [...prev, id];
     });
   };
 
-  const handleNext = () => {
-    if (stage === 'selection' && selectedIds.length === REQUIRED_SELECTION) {
-      setStage('reordering');
+  const handleReset = () => {
+    if (confirm("最初からやり直しますか？")) {
+      setSelectedIds(initialStickers.map(s => s.id));
+      setStage('selection');
+      localStorage.removeItem('is_confirmed');
+      setIsConfirmed(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (stage === 'reordering') {
-      setStage('slideshow');
     }
   };
 
+  const handleNotifyTeacher = () => {
+    const message = prompt("先生へのひとことメッセージを入力してください：", "40個選びました！よろしくお願いします。");
+    if (message === null) return;
+
+    const filenames = reorderList.map((s, i) => `${i + 1}. ${s.url.split('/').slice(-2).join('/')}`).join('\n');
+    const subject = encodeURIComponent("【スタンプ確定】報告：40個選びました");
+    const body = encodeURIComponent(`先生へ\n\n${message}\n\n■選んだスタンプリスト：\n${filenames}`);
+    
+    setIsConfirmed(true);
+    localStorage.setItem('is_confirmed', 'true');
+    window.location.href = `mailto:miidacnt@gmail.com?subject=${subject}&body=${body}`;
+  };
+
   return (
-    <div className="min-h-screen pb-40 pt-44 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
+    <div className="min-h-screen pb-40 pt-60 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
       {stage === 'selection' && (
         <div className="max-w-4xl mx-auto">
           <ProgressBar 
             current={selectedIds.length} 
             total={REQUIRED_SELECTION} 
             text="えらんだ数" 
+            onReset={handleReset}
+            isConfirmed={isConfirmed}
           />
           
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-3">
@@ -183,6 +249,8 @@ export default function Home() {
             current={REQUIRED_SELECTION} 
             total={REQUIRED_SELECTION} 
             text="並べ替え" 
+            onReset={handleReset}
+            isConfirmed={isConfirmed}
           />
           
           <div className="mb-6 bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between font-sans">
@@ -195,14 +263,18 @@ export default function Home() {
           <Reorder.Group 
             axis="y" 
             values={reorderList} 
-            onReorder={setReorderList}
+            onReorder={(newOrder) => !isConfirmed && setReorderList(newOrder)}
             className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3"
           >
             {reorderList.map((sticker, idx) => (
               <Reorder.Item 
                 key={sticker.id} 
                 value={sticker}
-                className="relative aspect-square bg-white rounded-xl p-2 shadow-sm border border-gray-50 touch-none cursor-grab active:cursor-grabbing"
+                drag={!isConfirmed}
+                className={cn(
+                  "relative aspect-square bg-white rounded-xl p-2 shadow-sm border border-gray-50 touch-none",
+                  !isConfirmed ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+                )}
               >
                 <img src={sticker.url} alt="" className="w-full h-full object-contain pointer-events-none" />
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#00B900] text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-md border border-white">
@@ -214,19 +286,33 @@ export default function Home() {
         </div>
       )}
 
-      {stage === 'slideshow' && (
+      {(stage === 'slideshow' || isConfirmed) && (
         <div className="fixed inset-0 z-[100] bg-white overflow-hidden flex flex-col">
-          <div className="p-4 flex items-center justify-between border-b border-gray-100 mt-8">
+          <div className="p-4 flex items-center justify-between border-b border-gray-100 pt-16">
             <button 
-              onClick={() => setStage('reordering')}
-              className="w-10 h-10 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center transition-all active:scale-90"
+              onClick={() => isConfirmed ? (setStage('selection'), window.scrollTo(0,0)) : setStage('reordering')}
+              className="w-10 h-10 bg-gray-50 text-gray-500 rounded-full flex items-center justify-center transition-all active:scale-90"
             >
-              <X size={24} />
+              {isConfirmed ? <X size={24} /> : <X size={24} />}
             </button>
-            <div className="text-sm font-bold text-gray-400">
-              {slideshowIndex + 1} / {REQUIRED_SELECTION}
+            <div className="flex flex-col items-center">
+              <div className="text-xl font-black text-[#00B900]">スライドショー</div>
+              <div className="text-xs font-bold text-gray-400">
+                {slideshowIndex + 1} / {REQUIRED_SELECTION}
+              </div>
             </div>
-            <div className="w-10" />
+            {!isConfirmed ? (
+              <button 
+                onClick={handleNotifyTeacher}
+                className="px-4 py-2 bg-[#00B900] text-white text-xs font-black rounded-lg shadow-md"
+              >
+                先生に知らせる
+              </button>
+            ) : (
+              <div className="px-4 py-2 bg-gray-100 text-gray-400 text-[10px] font-black rounded-lg">
+                報告済み
+              </div>
+            )}
           </div>
 
           <div className="flex-1 flex flex-col items-center justify-center p-8">
@@ -253,30 +339,30 @@ export default function Home() {
                 )}
               </AnimatePresence>
 
-              <div className="absolute inset-y-0 -left-4 -right-4 flex items-center justify-between pointer-events-none">
+              <div className="absolute inset-y-0 -left-6 -right-6 flex items-center justify-between pointer-events-none">
                 <button 
                   onClick={() => setSlideshowIndex(prev => Math.max(0, prev - 1))}
                   className={cn(
-                    "pointer-events-auto w-12 h-12 rounded-full bg-white/80 shadow-lg border border-gray-100 flex items-center justify-center text-gray-400 transition-all active:scale-90",
+                    "pointer-events-auto w-14 h-14 rounded-full bg-white shadow-xl border border-gray-100 flex items-center justify-center text-gray-400 transition-all active:scale-90",
                     slideshowIndex === 0 && "opacity-20 pointer-events-none"
                   )}
                 >
-                  <ChevronLeft size={32} />
+                  <ChevronLeft size={40} />
                 </button>
                 <button 
                   onClick={() => setSlideshowIndex(prev => Math.min(REQUIRED_SELECTION - 1, prev + 1))}
                   className={cn(
-                    "pointer-events-auto w-12 h-12 rounded-full bg-white/80 shadow-lg border border-gray-100 flex items-center justify-center text-gray-400 transition-all active:scale-90",
+                    "pointer-events-auto w-14 h-14 rounded-full bg-white shadow-xl border border-gray-100 flex items-center justify-center text-gray-400 transition-all active:scale-90",
                     slideshowIndex === REQUIRED_SELECTION - 1 && "opacity-20 pointer-events-none"
                   )}
                 >
-                  <ChevronRight size={32} />
+                  <ChevronRight size={40} />
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="p-6 bg-gray-50 border-t border-gray-100 mb-4 flex flex-col gap-4">
+          <div className="p-6 bg-gray-50 border-t border-gray-100 mb-4">
             <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide snap-x">
               {reorderList.map((sticker, i) => (
                 <button
@@ -293,54 +379,46 @@ export default function Home() {
                 </button>
               ))}
             </div>
-
-            {slideshowIndex === REQUIRED_SELECTION - 1 && (
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                onClick={() => {
-                  const filenames = reorderList.map(s => s.url.split('/').slice(-2).join('/')).join('\n');
-                  const subject = encodeURIComponent("選んだスタンプのリスト");
-                  const body = encodeURIComponent(`選んだ40個のスタンプリストです：\n\n${filenames}`);
-                  window.location.href = `mailto:?subject=${subject}&body=${body}`;
-                }}
-                className="w-full py-4 bg-[#00B900] text-white rounded-full font-black text-xl shadow-xl flex items-center justify-center gap-2 hover:bg-[#00A000] active:scale-95 transition-all"
-              >
-                <CheckCircle2 size={24} />
-                リストをメールで送る
-              </motion.button>
-            )}
           </div>
         </div>
       )}
 
       <AnimatePresence>
-        {stage !== 'slideshow' && (
+        {!isConfirmed && stage !== 'slideshow' && (
           <motion.div 
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 flex flex-col gap-3"
           >
+            {selectedIds.length === REQUIRED_SELECTION && (
+              <button
+                onClick={() => setStage('slideshow')}
+                className="w-full py-3 bg-white text-[#00B900] border-2 border-[#00B900] rounded-full font-black text-sm flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
+              >
+                スライドショーで確認する
+              </button>
+            )}
+            
             <button
-              disabled={stage === 'selection' && selectedIds.length < REQUIRED_SELECTION}
-              onClick={handleNext}
+              disabled={selectedIds.length !== REQUIRED_SELECTION}
+              onClick={selectedIds.length === REQUIRED_SELECTION ? (stage === 'selection' ? () => setStage('reordering') : handleNotifyTeacher) : undefined}
               className={cn(
-                "w-full py-4 rounded-full font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg",
-                stage === 'selection' && selectedIds.length < REQUIRED_SELECTION
+                "w-full py-5 rounded-full font-black text-xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl",
+                selectedIds.length !== REQUIRED_SELECTION
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-[#00B900] text-white hover:bg-[#00A000]"
               )}
             >
               {stage === 'selection' ? (
                 <>
-                  <span>選択を完了する</span>
-                  <ArrowRight size={20} />
+                  <span>つぎへ（順番をきめる）</span>
+                  <ArrowRight size={24} />
                 </>
               ) : (
                 <>
-                  <span>大きく表示する</span>
-                  <Sparkles size={20} />
+                  <span>先生に知らせる</span>
+                  <Sparkles size={24} />
                 </>
               )}
             </button>
@@ -351,14 +429,6 @@ export default function Home() {
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        @keyframes sparkle {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.2); }
-        }
-        .h-animate-sparkle {
-          animation: sparkle 2s ease-in-out infinite;
-        }
       `}</style>
     </div>
   );
