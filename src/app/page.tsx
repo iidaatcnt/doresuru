@@ -62,21 +62,24 @@ const initialStickers: Sticker[] = stickerPaths.map((path, i) => {
 // --- Components ---
 
 const ProgressBar = ({ current, total, text }: { current: number; total: number; text: string }) => (
-  <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-4 pt-10 pb-4 shadow-md">
-    <div className="max-w-xl mx-auto flex flex-col gap-3">
-      <div className="flex justify-between items-center text-white">
-        <h1 className="text-xl font-bold tracking-tight">{text}</h1>
-        <div className="bg-white/20 px-3 py-1 rounded-full text-sm font-black">
-          {current} <span className="opacity-60">/</span> {total}
+  <div className="fixed top-0 left-0 w-full bg-[#00B900] z-50 px-6 pt-12 pb-6 shadow-xl border-b border-white/20">
+    <div className="max-w-xl mx-auto flex flex-col gap-4">
+      <div className="flex flex-col items-center justify-center text-white gap-1">
+        <span className="text-xs font-black opacity-80 tracking-widest uppercase">{text}</span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-5xl font-black tabular-nums">{current}</span>
+          <span className="text-xl font-bold opacity-60">/ {total}</span>
         </div>
-      </div>
-      <div className="h-1 bg-black/10 rounded-full overflow-hidden">
-        <motion.div 
-          className="h-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-          initial={{ width: 0 }}
-          animate={{ width: `${(current / total) * 100}%` }}
-          transition={{ duration: 0.5, ease: "circOut" }}
-        />
+        {current > total && (
+          <div className="mt-2 bg-yellow-400 text-slate-900 px-4 py-1 rounded-full text-xs font-black animate-bounce shadow-lg">
+            あと {current - total} 個ボツにしよう！
+          </div>
+        )}
+        {current === total && (
+          <div className="mt-2 bg-white text-[#00B900] px-4 py-1 rounded-full text-xs font-black shadow-lg">
+            ちょうど40個！バッチリだよ！
+          </div>
+        )}
       </div>
     </div>
   </div>
@@ -85,7 +88,8 @@ const ProgressBar = ({ current, total, text }: { current: number; total: number;
 export default function Home() {
   const [stage, setStage] = useState<Stage>('selection');
   const [stickers] = useState<Sticker[]>(initialStickers);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // 全て選択された状態で初期化
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialStickers.map(s => s.id));
   const [reorderList, setReorderList] = useState<Sticker[]>([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
 
@@ -98,8 +102,12 @@ export default function Home() {
 
   const toggleSelection = (id: string) => {
     setSelectedIds(prev => {
-      if (prev.includes(id)) return prev.filter(i => i !== id);
-      if (prev.length >= REQUIRED_SELECTION) return prev;
+      if (prev.includes(id)) {
+        // すでに選ばれているものをタップしたら除外（ボツ）にする
+        return prev.filter(i => i !== id);
+      }
+      // 除外されているものをタップしたら再選択
+      if (prev.length >= stickers.length) return prev;
       return [...prev, id];
     });
   };
@@ -114,19 +122,18 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen pb-40 pt-32 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
+    <div className="min-h-screen pb-40 pt-44 px-4 bg-[#F8F9FA] font-sans selection:bg-[#00B900]/20">
       {stage === 'selection' && (
         <div className="max-w-4xl mx-auto">
           <ProgressBar 
             current={selectedIds.length} 
             total={REQUIRED_SELECTION} 
-            text="スタンプ選択" 
+            text="えらんだ数" 
           />
           
           <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-8 gap-3">
             {stickers.map((sticker) => {
               const isSelected = selectedIds.includes(sticker.id);
-              const isDisabled = !isSelected && selectedIds.length >= REQUIRED_SELECTION;
               
               return (
                 <motion.div
@@ -137,12 +144,14 @@ export default function Home() {
                   className={cn(
                     "relative aspect-square rounded-xl p-1 bg-white border cursor-pointer transition-all duration-300",
                     isSelected 
-                      ? "border-[#00B900] shadow-[0_4px_12px_rgba(0,185,0,0.2)]" 
-                      : "border-gray-100 shadow-sm",
-                    isDisabled && "opacity-20 grayscale saturate-0 pointer-events-none"
+                      ? "border-gray-100 shadow-sm" 
+                      : "border-red-500/50 bg-gray-100 shadow-inner",
                   )}
                 >
-                  <div className="w-full h-full flex items-center justify-center p-1.5 bg-gray-50/30 rounded-lg">
+                  <div className={cn(
+                    "w-full h-full flex items-center justify-center p-1.5 rounded-lg transition-all",
+                    !isSelected && "grayscale opacity-30"
+                  )}>
                     <img 
                       src={sticker.url} 
                       alt="" 
@@ -150,15 +159,15 @@ export default function Home() {
                     />
                   </div>
                   
-                  {sticker.recommended && (
-                    <div className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black shadow-sm border border-white z-20 uppercase tracking-tighter">
+                  {sticker.recommended && isSelected && (
+                    <div className="absolute -top-1.5 -left-1.5 bg-yellow-400 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black shadow-sm border border-white z-20">
                       HOT
                     </div>
                   )}
                   
-                  {isSelected && (
-                    <div className="absolute -top-2 -right-2 bg-[#00B900] rounded-full p-1 shadow-md border-2 border-white z-10">
-                      <CheckCircle2 className="text-white" size={12} />
+                  {!isSelected && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/5 rounded-xl z-30 pointer-events-none">
+                      <X className="text-red-500 w-full h-full p-2 opacity-80" />
                     </div>
                   )}
                 </motion.div>
