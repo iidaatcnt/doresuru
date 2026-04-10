@@ -19,7 +19,7 @@ export function Slideshow({
   isConfirmed,
 }: SlideshowProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [message, setMessage] = useState(`${stickers.length}個選びました！`);
+  const [message, setMessage] = useState(`よろしくお願いします！`);
   const [showMessageInput, setShowMessageInput] = useState(false);
 
   const prev = () => setCurrentIndex((i) => Math.max(0, i - 1));
