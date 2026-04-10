@@ -18,8 +18,14 @@ export function Slideshow({
   isSending,
   isConfirmed,
 }: SlideshowProps) {
+  const stickerList = stickers
+    .map((s, i) => `${i + 1}. ${s.categoryName} ${s.filename ? s.filename : `#${s.order}`}`)
+    .join('\n');
+    
+  const defaultText = `先生へ\n\nよろしくお願いします！\n\n■選んだスタンプリスト：\n${stickerList}`;
+
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [message, setMessage] = useState(`よろしくお願いします！`);
+  const [message, setMessage] = useState(defaultText);
   const [showMessageInput, setShowMessageInput] = useState(false);
 
   const prev = () => setCurrentIndex((i) => Math.max(0, i - 1));
@@ -136,7 +142,7 @@ export function Slideshow({
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 className="modal-textarea"
-                rows={4}
+                rows={10}
                 placeholder="先生へのメッセージを入力..."
               />
               <button onClick={handleSend} className="btn btn-green btn-full">

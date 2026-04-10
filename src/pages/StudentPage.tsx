@@ -39,24 +39,18 @@ export function StudentPage() {
     }
   };
 
-  const handleConfirm = async (message: string) => {
+  const handleConfirm = async (fullText: string) => {
     setIsSending(true);
     try {
       // Firestoreに確定フラグを保存
       await confirm();
 
-      // クリップボードにコピー
-      const stickerList = selectedList
-        .map((s, i) => `${i + 1}. ${s.categoryName} ${s.filename ? s.filename : `#${s.order}`}`)
-        .join('\n');
-      const body = `先生へ\n\nメッセージ: ${message}\n\n■選んだスタンプリスト：\n${stickerList}`;
-      
       try {
-        await navigator.clipboard.writeText(body);
+        await navigator.clipboard.writeText(fullText);
         alert('スタンプの選択リストをコピーしました！\nLINEやDiscordに貼り付けて先生に送ってください。');
       } catch (err) {
         // フォールバック: textareaを表示して手動コピーを促す簡単なプロンプト
-        prompt('以下のテキストをコピーして送信してください：', body);
+        prompt('以下のテキストをコピーして送信してください：', fullText);
       }
 
       setShowSlideshow(false);
