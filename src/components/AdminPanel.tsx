@@ -176,6 +176,27 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
     }
   };
 
+  // スタンプ一括削除
+  const handleDeleteAll = async () => {
+    if (!window.confirm('本当によろしいですか？\n登録済みのすべてのスタンプが【完全に消去】され元に戻せません！')) return;
+    setIsLoading(true);
+    try {
+      // Storage と Firestore から全て削除
+      for (const sticker of stickers) {
+        const storageRef = ref(storage, sticker.storagePath);
+        await deleteObject(storageRef).catch(() => {});
+        await deleteDoc(doc(db, 'stickers', sticker.firestoreId));
+      }
+      setStickers([]);
+      alert('すべてのスタンプを削除しました。');
+    } catch (e) {
+      console.error('Delete All error:', e);
+      setError('一括削除に失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const progressLabel = {
     pending: '⏳',
     uploading: '⬆️',
@@ -283,9 +304,19 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
               <ImageIcon size={18} />
               登録済みスタンプ一覧
             </h2>
-            <button onClick={loadStickers} className="btn-icon" disabled={isLoading}>
-              <RefreshCw size={18} className={isLoading ? 'spin' : ''} />
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button onClick={loadStickers} className="btn-icon" disabled={isLoading} title="更新">
+                <RefreshCw size={18} className={isLoading ? 'spin' : ''} />
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={isLoading || stickers.length === 0}
+                className="btn btn-white"
+                style={{ color: 'var(--red)', fontSize: '13px', padding: '6px 12px' }}
+              >
+                <Trash2 size={16} />すべて消す
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -300,9 +331,10 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
               {stickers.map((sticker) => (
                 <div key={sticker.firestoreId} className="admin-sticker-card">
                   <img src={sticker.downloadUrl} alt="" className="admin-sticker-img" />
-                  <div className="admin-sticker-meta">
-                    <span className="admin-cat-badge">{sticker.categoryName}</span>
-                    <span className="admin-order">#{sticker.order}</span>
+                  <div className="admin-sticker-meta" style={{ flexWrap: 'wrap' }}>
+                    <span className="admin-cat-badge">
+                      {sticker.categoryName} {sticker.filename ? sticker.filename : `#${sticker.order}`}
+                    </span>
                   </div>
                   <button
                     onClick={() => handleDelete(sticker)}
