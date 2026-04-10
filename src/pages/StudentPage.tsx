@@ -47,7 +47,7 @@ export function StudentPage() {
 
       // クリップボードにコピー
       const stickerList = selectedList
-        .map((s, i) => `${i + 1}. ${s.filename ? s.filename.replace(/\.[^/.]+$/, "") : `${s.categoryName} #${s.order}`}`)
+        .map((s, i) => `${i + 1}. ${s.categoryName} ${s.filename ? s.filename : `#${s.order}`}`)
         .join('\n');
       const body = `先生へ\n\nメッセージ: ${message}\n\n■選んだスタンプリスト：\n${stickerList}`;
       
