@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // スタンプ一覧: 誰でも読み取り可能、書き込みは全員（開発中）
+    match /stickers/{stickerId} {
+      allow read: if true;
+      allow write: if true; // TODO: 本番では管理者認証に変更
+    }
+    
+    // 生徒の選択: 誰でも読み書き可能
+    match /sticker_selections/{nickname} {
+      allow read, write: if true;
+    }
+  }
+}
