@@ -37,11 +37,9 @@ export function StickerGrid({ stickers, onSelect, disabled }: StickerGridProps) 
               className="sticker-img"
               loading="lazy"
             />
-            {sticker.filename && (
-              <div className="sticker-filename">
-                {sticker.filename.replace(/\.[^/.]+$/, "")}
-              </div>
-            )}
+            <div className="sticker-filename">
+              {sticker.categoryName} {sticker.filename ? sticker.filename.replace(/\.[^/.]+$/, "") : sticker.order}
+            </div>
             <div className="sticker-hover-overlay">
               <Plus size={20} />
             </div>

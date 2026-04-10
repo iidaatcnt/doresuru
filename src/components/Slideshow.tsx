@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Copy, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, X, Play, Pause } from 'lucide-react';
 import type { Sticker } from '@/types';
 
 interface SlideshowProps {
@@ -27,6 +27,15 @@ export function Slideshow({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [message, setMessage] = useState(defaultText);
   const [showMessageInput, setShowMessageInput] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % stickers.length);
+    }, 2500); // 2.5 seconds per slide
+    return () => clearInterval(timer);
+  }, [isPlaying, stickers.length]);
 
   const prev = () => setCurrentIndex((i) => Math.max(0, i - 1));
   const next = () => setCurrentIndex((i) => Math.min(stickers.length - 1, i + 1));
@@ -51,11 +60,19 @@ export function Slideshow({
         <button onClick={onClose} className="slideshow-back">
           <ChevronLeft size={28} />
         </button>
-        <div className="slideshow-title">
+        <div className="slideshow-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span className="slideshow-label">最終チェック</span>
           <span className="slideshow-counter">
             {currentIndex + 1} / {stickers.length}
           </span>
+          <button 
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="btn btn-white"
+            style={{ padding: '6px 12px', display: 'flex', gap: '6px', fontSize: '13px', alignItems: 'center', marginLeft: 'auto' }}
+          >
+            {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+            {isPlaying ? '停止' : '自動再生'}
+          </button>
         </div>
         {!isConfirmed ? (
           <button

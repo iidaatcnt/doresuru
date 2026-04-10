@@ -56,11 +56,9 @@ export function SelectedList({
               <div className="reorder-number">{idx + 1}</div>
               <div className="reorder-img-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <img src={sticker.url} alt="" className="reorder-img" />
-                {sticker.filename && (
-                  <div className="sticker-filename">
-                    {sticker.filename.replace(/\.[^/.]+$/, "")}
-                  </div>
-                )}
+                <div className="sticker-filename">
+                  {sticker.categoryName} {sticker.filename ? sticker.filename.replace(/\.[^/.]+$/, "") : sticker.order}
+                </div>
               </div>
               <div className="reorder-actions">
                 {!isConfirmed && (
