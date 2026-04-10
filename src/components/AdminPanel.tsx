@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from '@/lib/firebase';
@@ -48,6 +48,10 @@ export function AdminPanel({ onClose }: AdminPanelProps) {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    loadStickers();
+  }, [loadStickers]);
 
   // ファイル選択時プレビューキューに追加（ZIP対応）
   const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
