@@ -34,8 +34,11 @@ export function useStickers() {
         };
       });
       data.sort((a, b) => {
-        if (a.category === b.category) return a.order - b.order;
-        return a.category.localeCompare(b.category);
+        if (a.category !== b.category) return a.category.localeCompare(b.category);
+        // ファイル名の辞書順（01.png, 02.png, ...）でソート
+        const fa = (a.filename ?? '').toLowerCase();
+        const fb = (b.filename ?? '').toLowerCase();
+        return fa.localeCompare(fb, undefined, { numeric: true, sensitivity: 'base' });
       });
       setStickers(data);
     } catch (err) {
